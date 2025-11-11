@@ -10,3 +10,6 @@ credentials.json
 
 # VSCode
 .vscode/
+
+# Hubspot Api
+KEY.py
