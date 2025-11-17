@@ -1,9 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
 from time import sleep
-from requests_html import HTMLSession
-import json
-import re
 
 
 headers = {
@@ -25,25 +22,105 @@ headers = {
 }
 
 BASE_URL= "https://prom.ua"
-#url = "https://prom.ua/ua/Kuhonnye-plity"
+URL = "https://prom.ua/ua/Kuhonnye-plity"
 
-def find_href_list(url):
-    r = requests.get(url, headers=headers)
-    soup = BeautifulSoup(r.text, "lxml")
-
-    list_href = []
-    product_gallery = soup.find("div", {"data-qaid": "product_gallery"})
-    list_link = product_gallery.find_all("a", {"data-qaid": "product_link"})
+def find_page():
     
-    for link in list_link:
-        href = BASE_URL + link["href"]
-        #print(href, "\n")
-        list_href.append(href)
-    return list_href
+    page = 1
+    
+    while True:
+        url_page = f"{URL};{page}"
+        
+        r = requests.get(url_page, headers=headers)
+        soup = BeautifulSoup(r.text, "lxml")
+        
+        yield url_page
+        print(f"Parsing {page} page \n")
+        
+        pogination = soup.find("div", {"data-qaid": "pagination"})
+        
+        if pogination:
+            button = pogination.find("a", {"data-qaid": "next_page"})
+
+        else:
+            button = None
+            
+        if button:
+            page += 1
+            
+        else:
+            break
+       
+
+def find_href_list():
+    for link_url in find_page():
+        r = requests.get(link_url, headers=headers)
+        soup = BeautifulSoup(r.text, "lxml")
+
+        product_gallery = soup.find("div", {"data-qaid": "product_gallery"})
+        list_link = product_gallery.find_all("a", {"data-qaid": "product_link"})
+            
+        for link in list_link:
+            href = BASE_URL + link["href"]
+            yield href
     
 
-find_href_list("https://prom.ua/ua/Kuhonnye-plity")
 
-def find_product_info(url):     
-# url = https://prom.ua/p1927166823-plita-kombinirovannaya-grifon.html
-    r = requests
+
+def find_product_info(): 
+    prod = 1
+        
+    for url in find_href_list():
+
+        response = requests.get(url, headers=headers)
+        bs = BeautifulSoup(response.text, "lxml")
+    
+        # Имя товара
+        try:
+            div_product_name = bs.find("div", {"data-qaid": "main_product_info"})
+            name = div_product_name.find("h1", {"data-qaid": "product_name"}).text
+        except:
+            name = None
+            
+        # Code product
+        try:
+            id_product = bs.find("span", {"data-qaid": "product-sku"}).text.replace("Код: ", "")
+        except:
+            id_product = None
+            
+        #Nali4ie
+        try:
+            presense = bs.find("span", {"data-qaid": "product_presence"}).text
+        except:
+            presense = None
+        
+        #Price
+        try:
+            price_div = div_product_name.find("div", {"data-qaid": "product_price"})
+            price = price_div.find("span").text.replace(" ", "")
+        except:
+            price = None
+            
+        # Link store
+        try:
+            store = bs.find("a", {"data-qaid": "company_name"})["href"]
+            store_link = BASE_URL + store
+        except:
+            store_link = None
+            
+        # Link image product
+        try:
+            div_image_product = bs.find("div", {"data-qaid": "image_block"})
+            image_product = div_image_product.find("img")["src"]
+        except:
+            image_product = None
+                
+        yield {"Название товара": name,
+                "Код товара": id_product,
+                "Наличие товара": presense,
+                "Цена": price,
+                "Линк на магазин": store_link,
+                "Картинка товара": image_product}
+        print(f"PArsing {prod} product \n")
+        prod += 1
+        sleep(1)
