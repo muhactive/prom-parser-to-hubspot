@@ -24,14 +24,29 @@ headers = {
 BASE_URL= "https://prom.ua"
 URL = "https://prom.ua/ua/Kuhonnye-plity"
 
-def find_page():
+def safe_page(url, retries=5, delay=2):
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            return response
+        except Exception as e:
+            print(f"Ошибка соединения: {e} \n Повтор:{attempt+1}/{retries}")
+            sleep(delay)
+    return None
     
+    
+
+def find_page():
     page = 1
     
     while True:
         url_page = f"{URL};{page}"
         
-        r = requests.get(url_page, headers=headers)
+        r = safe_page(url_page)
+        if r is None:
+            print("Страница не открілась. Остановка пагинации")
+            break
+        
         soup = BeautifulSoup(r.text, "lxml")
         
         yield url_page
@@ -54,10 +69,18 @@ def find_page():
 
 def find_href_list():
     for link_url in find_page():
-        r = requests.get(link_url, headers=headers)
+        r = safe_page(link_url)
+        
+        if r is None:
+            print("Не удалось загрузить список товаров")
+            continue
+        
         soup = BeautifulSoup(r.text, "lxml")
 
         product_gallery = soup.find("div", {"data-qaid": "product_gallery"})
+        if not product_gallery:
+            continue
+        
         list_link = product_gallery.find_all("a", {"data-qaid": "product_link"})
             
         for link in list_link:
@@ -72,7 +95,11 @@ def find_product_info():
         
     for url in find_href_list():
 
-        response = requests.get(url, headers=headers)
+        response = safe_page(url)
+        if response is None:
+            print("Пропускаю товар(нет ответа)")
+            continue
+        
         bs = BeautifulSoup(response.text, "lxml")
     
         # Имя товара
